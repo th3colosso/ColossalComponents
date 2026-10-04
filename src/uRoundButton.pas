@@ -15,8 +15,9 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, Winapi.GDIPAPI, Winapi.GDIPOBJ,
-  System.Classes, System.SysUtils, System.Types,
-  Vcl.Controls, Vcl.Graphics, Vcl.StdCtrls, Vcl.Forms, Vcl.Menus;
+  System.Classes, System.SysUtils, System.Types, Vcl.ImgList,
+  Vcl.Controls, Vcl.Graphics, Vcl.StdCtrls, Vcl.Forms, Vcl.Menus,
+ System.UITypes;
 
 type
   TRoundButtonState = (rbsNormal, rbsHover, rbsPressed, rbsDisabled);
@@ -38,6 +39,11 @@ type
     FMouseInside: Boolean;
     FMouseDown: Boolean;
     FKeyDown: Boolean;
+    FImages: TCustomImageList;
+    FImageIndex: TImageIndex;
+    FImageAlignment: TImageAlignment;
+    FSpacing: Integer;
+    FImageChangeLink: TChangeLink;
     procedure SetRadius(const Value: Integer);
     procedure SetBorderWidth(const Value: Integer);
     procedure SetBorderColor(const Value: TColor);
@@ -47,6 +53,12 @@ type
     procedure SetPressedColor(const Value: TColor);
     procedure SetDisabledColor(const Value: TColor);
     procedure SetDefault(const Value: Boolean);
+    procedure SetImages(const Value: TCustomImageList);
+    procedure SetImageIndex(const Value: TImageIndex);
+    procedure SetImageAlignment(const Value: TImageAlignment);
+    procedure SetSpacing(const Value: Integer);
+    procedure ImageListChange(Sender: TObject);
+    function HasImage: Boolean;
     procedure ChangeColor(var Field: TColor; const Value: TColor);
     function CurrentState: TRoundButtonState;
     function StateFillColor(AState: TRoundButtonState): TColor;
@@ -54,7 +66,7 @@ type
     function CreateFramePath: TGPGraphicsPath;
     procedure PaintParentBackground;
     procedure PaintFrame(AFillColor, ABorderColor: TColor);
-    procedure PaintCaption(AState: TRoundButtonState);
+    procedure PaintContent(AState: TRoundButtonState);
     procedure CMMouseEnter(var Msg: TMessage); message CM_MOUSEENTER;
     procedure CMMouseLeave(var Msg: TMessage); message CM_MOUSELEAVE;
     procedure CMEnabledChanged(var Msg: TMessage); message CM_ENABLEDCHANGED;
@@ -68,6 +80,7 @@ type
     procedure WMUpdateUIState(var Msg: TMessage); message WM_UPDATEUISTATE;
   protected
     procedure Paint; override;
+    procedure Notification(AComponent: TComponent; Operation: TOperation); override;
     procedure CreateWnd; override;
     procedure DoExit; override;
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
@@ -76,6 +89,7 @@ type
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
   public
     constructor Create(AOwner: TComponent); override;
+    destructor Destroy; override;
     procedure Click; override;
   published
     property Caption;
@@ -90,6 +104,10 @@ type
     property Default: Boolean read FDefault write SetDefault default False;
     property Cancel: Boolean read FCancel write FCancel default False;
     property ModalResult: TModalResult read FModalResult write FModalResult default 0;
+    property Images: TCustomImageList read FImages write SetImages;
+    property ImageIndex: TImageIndex read FImageIndex write SetImageIndex default -1;
+    property ImageAlignment: TImageAlignment read FImageAlignment write SetImageAlignment default iaLeft;
+    property Spacing: Integer read FSpacing write SetSpacing default 8;
     property Align;
     property Anchors;
     property Cursor;
@@ -176,6 +194,25 @@ begin
   FHoverColor := $00FBF1E5;
   FPressedColor := $00F7E4CC;
   FDisabledColor := $00CCCCCC;
+  FImageIndex := -1;
+  FImageAlignment := iaLeft;
+  FSpacing := 8;
+  FImageChangeLink := TChangeLink.Create;
+  FImageChangeLink.OnChange := ImageListChange;
+end;
+
+destructor TRoundButton.Destroy;
+begin
+  FImageChangeLink.Free; // also unregisters itself from the image list
+  inherited;
+end;
+
+procedure TRoundButton.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited;
+  // The image list was destroyed: drop the dangling reference
+  if (Operation = opRemove) and (AComponent = FImages) then
+    SetImages(nil);
 end;
 
 procedure TRoundButton.CreateWnd;
@@ -295,41 +332,130 @@ begin
   end;
 end;
 
-procedure TRoundButton.PaintCaption(AState: TRoundButtonState);
+function TRoundButton.HasImage: Boolean;
+begin
+  Result := (FImages <> nil) and (FImageIndex >= 0) and (FImageIndex < FImages.Count);
+end;
+
+procedure TRoundButton.PaintContent(AState: TRoundButtonState);
 var
-  R: TRect;
   Text: string;
   Format: TTextFormat;
   TM: TTextMetric;
-  CapH, Baseline: Integer;
+  Content, TextBox, Measure: TRect;
+  CapH, ImgW, ImgH, ImgX, ImgY: Integer;
+  TextW, TextH, TextTop, AvailW, GroupW, GroupH, X0, Y0, Gap: Integer;
+  ShowImage, ShowText: Boolean;
 begin
   Text := Caption;
-  if Text = '' then Exit;
+  ShowImage := HasImage;
+  ShowText := Text <> '';
+  if not (ShowImage or ShowText) then Exit;
 
   Canvas.Font.Assign(Font);
   if AState = rbsDisabled then
     Canvas.Font.Color := clGrayText;
   Canvas.Brush.Style := bsClear;
 
-  // Optical vertical centering: center the body of the text (the height of a
-  // capital letter above the baseline) instead of the whole line box, which
-  // also contains the descender and internal leading and makes the text look
-  // low. DT_VCENTER is not used because it pins text taller than the rect to
-  // the top. TextHeight forces the font to be selected into the canvas DC.
-  Canvas.TextHeight(Text);
+  // TextHeight forces the font to be selected into the canvas DC
+  Canvas.TextHeight('Hg');
   GetTextMetrics(Canvas.Handle, TM);
   CapH := CapHeightOf(Canvas.Handle, TM);
-  Baseline := (Height + CapH) div 2;
-  R := Rect(FBorderWidth + 4, Baseline - TM.tmAscent,
-    Width - FBorderWidth - 4, Baseline - TM.tmAscent + TM.tmHeight);
 
-  // tfNoClip: oversized text must not be cut off by the line-box rect
-  Format := [tfCenter, tfSingleLine, tfEndEllipsis, tfNoClip];
-  // Underline the accelerator only when Windows says it should be visible
-  if (Perform(WM_QUERYUISTATE, 0, 0) and UISF_HIDEACCEL) <> 0 then
-    Include(Format, tfHidePrefix);
+  Content := Rect(FBorderWidth + 4, 0, Width - FBorderWidth - 4, Height);
+  AvailW := Max(0, Content.Right - Content.Left);
 
-  Canvas.TextRect(R, Text, Format);
+  ImgW := 0;
+  ImgH := 0;
+  if ShowImage then
+  begin
+    ImgW := FImages.Width;
+    ImgH := FImages.Height;
+  end;
+
+  TextW := 0;
+  if ShowText then
+  begin
+    Measure := Rect(0, 0, 0, 0);
+    Canvas.TextRect(Measure, Text, [tfCalcRect, tfSingleLine]);
+    TextW := Measure.Right - Measure.Left;
+  end;
+
+  if ShowImage and ShowText then
+    Gap := FSpacing
+  else
+    Gap := 0;
+
+  // Default (no image): optical vertical centering. Center the body of the
+  // text (the height of a capital letter above the baseline) instead of the
+  // whole line box, which also contains the descender and internal leading
+  // and makes the text look low. DT_VCENTER is not used because it pins text
+  // taller than the rect to the top.
+  TextTop := (Height + CapH) div 2 - TM.tmAscent;
+  TextBox := Rect(Content.Left, TextTop, Content.Right, TextTop + TM.tmHeight);
+  ImgX := 0;
+  ImgY := 0;
+
+  if ShowImage then
+    case FImageAlignment of
+      iaLeft, iaRight:
+        begin
+          // [image][gap][text], the whole group centered horizontally
+          TextW := Min(TextW, Max(0, AvailW - ImgW - Gap));
+          GroupW := ImgW + Gap + TextW;
+          X0 := Content.Left + (AvailW - GroupW) div 2;
+          ImgY := (Height - ImgH) div 2;
+          if FImageAlignment = iaLeft then
+          begin
+            ImgX := X0;
+            TextBox.Left := X0 + ImgW + Gap;
+          end
+          else
+          begin
+            TextBox.Left := X0;
+            ImgX := X0 + TextW + Gap;
+          end;
+          TextBox.Right := TextBox.Left + TextW;
+        end;
+      iaTop, iaBottom:
+        begin
+          // image above/below the text, the whole group centered vertically
+          if ShowText then TextH := TM.tmHeight else TextH := 0;
+          GroupH := ImgH + Gap + TextH;
+          Y0 := (Height - GroupH) div 2;
+          ImgX := Content.Left + (AvailW - ImgW) div 2;
+          if FImageAlignment = iaTop then
+          begin
+            ImgY := Y0;
+            TextTop := Y0 + ImgH + Gap;
+          end
+          else
+          begin
+            TextTop := Y0;
+            ImgY := Y0 + TextH + Gap;
+          end;
+          TextBox := Rect(Content.Left, TextTop, Content.Right, TextTop + TM.tmHeight);
+        end;
+      iaCenter:
+        begin
+          // image centered, caption (if any) drawn on top like TButton does
+          ImgX := Content.Left + (AvailW - ImgW) div 2;
+          ImgY := (Height - ImgH) div 2;
+        end;
+    end;
+
+  if ShowImage then
+    FImages.Draw(Canvas, ImgX, ImgY, FImageIndex, Enabled);
+
+  if ShowText then
+  begin
+    // tfNoClip: oversized text must not be cut off by the line-box rect
+    Format := [tfCenter, tfSingleLine, tfEndEllipsis, tfNoClip];
+    // Underline the accelerator only when Windows says it should be visible
+    if (Perform(WM_QUERYUISTATE, 0, 0) and UISF_HIDEACCEL) <> 0 then
+      Include(Format, tfHidePrefix);
+    Canvas.TextRect(TextBox, Text, Format);
+  end;
 end;
 
 procedure TRoundButton.Paint;
@@ -339,7 +465,7 @@ begin
   State := CurrentState;
   PaintParentBackground;
   PaintFrame(StateFillColor(State), StateBorderColor(State));
-  PaintCaption(State);
+  PaintContent(State);
 end;
 
 { ---- mouse ---- }
@@ -564,6 +690,55 @@ end;
 procedure TRoundButton.SetDisabledColor(const Value: TColor);
 begin
   ChangeColor(FDisabledColor, Value);
+end;
+
+procedure TRoundButton.SetImages(const Value: TCustomImageList);
+begin
+  if FImages = Value then Exit;
+  if FImages <> nil then
+    FImages.UnRegisterChanges(FImageChangeLink);
+  FImages := Value;
+  if FImages <> nil then
+  begin
+    FImages.RegisterChanges(FImageChangeLink);
+    FImages.FreeNotification(Self);
+  end;
+  Invalidate;
+end;
+
+procedure TRoundButton.SetImageIndex(const Value: TImageIndex);
+begin
+  if FImageIndex <> Value then
+  begin
+    FImageIndex := Value;
+    Invalidate;
+  end;
+end;
+
+procedure TRoundButton.SetImageAlignment(const Value: TImageAlignment);
+begin
+  if FImageAlignment <> Value then
+  begin
+    FImageAlignment := Value;
+    Invalidate;
+  end;
+end;
+
+procedure TRoundButton.SetSpacing(const Value: Integer);
+var
+  NewValue: Integer;
+begin
+  NewValue := Max(0, Value);
+  if FSpacing <> NewValue then
+  begin
+    FSpacing := NewValue;
+    Invalidate;
+  end;
+end;
+
+procedure TRoundButton.ImageListChange(Sender: TObject);
+begin
+  Invalidate; // the image list content or size changed
 end;
 
 procedure TRoundButton.SetDefault(const Value: Boolean);

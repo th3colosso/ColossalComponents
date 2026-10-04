@@ -70,6 +70,7 @@ Unlike `TRoundEdit`, it does not host another control: `TRoundButton` is a self-
 - Keyboard support: `Space` to press, `Enter` for the `Default` button, `Esc` for the `Cancel` button
 - Accelerator keys through `&` in the caption (e.g. `&Save`)
 - `ModalResult` support, like `TButton`
+- Glyph support through an image list (`Images` / `ImageIndex`), placed left, right, above, below, or centered relative to the caption; drawn grayed out when the button is disabled
 - Cannot be used as a parent for other components (`csAcceptsControls` removed)
 - Double buffered, no flicker
 
@@ -89,6 +90,10 @@ Unlike `TRoundEdit`, it does not host another control: `TRoundButton` is a self-
 | `Default`       | Boolean      | `False`     | `Enter` clicks this button                               |
 | `Cancel`        | Boolean      | `False`     | `Esc` clicks this button                                 |
 | `ModalResult`   | TModalResult | `mrNone`    | Result set on the parent form when clicked               |
+| `Images`        | TCustomImageList |         | Image list holding the glyph (works with `TVirtualImageList`) |
+| `ImageIndex`    | TImageIndex  | `-1`        | Glyph to show (`-1` = no glyph)                          |
+| `ImageAlignment`| TImageAlignment | `iaLeft` | Glyph position relative to the caption: `iaLeft`, `iaRight`, `iaTop`, `iaBottom`, `iaCenter` |
+| `Spacing`       | Integer      | `8`         | Space between the glyph and the caption in pixels        |
 | `Font`          | TFont        |             | Font of the caption                                      |
 
 Standard properties such as `Align`, `Anchors`, `Margins`, `TabOrder`, `TabStop`, `Hint`, `PopupMenu`, `Visible`, and `Enabled`, plus the usual click, mouse, and keyboard events (`OnClick`, `OnMouseEnter`, `OnKeyDown`, ...), are also published.
@@ -142,6 +147,9 @@ begin
   Btn.Parent := Self;
   Btn.SetBounds(20, 70, 120, 36);
   Btn.Caption := '&Save';
+  Btn.Images := ImageList1;
+  Btn.ImageIndex := 0;
+  Btn.ImageAlignment := iaLeft;
   Btn.Default := True;
   Btn.ModalResult := mrOk;
   Btn.OnClick := SaveClick;
@@ -165,7 +173,7 @@ ColossalComponents/
 - The corners are painted with the parent's `Brush.Color`. If the parent has a background image or gradient, the corners show a solid color instead of the parent's background.
 - With VCL Styles active, the parent's `Brush.Color` may not match the style color, so the corners can look slightly off.
 - `TRoundEdit` has no special visual style for the disabled state yet (`TRoundButton` does).
-- `TRoundButton` has no glyph/image support yet, and the caption is single-line.
+- `TRoundButton`'s caption is single-line, and the glyph has no separate hover/pressed images.
 - Only Win32 is built by the package at the moment.
 
 ## License
