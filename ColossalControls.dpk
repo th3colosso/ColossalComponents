@@ -38,6 +38,7 @@ requires
   xmlrtl;
 
 contains
-  uRoundEdit in 'src\uRoundEdit.pas';
+  uRoundEdit in 'src\uRoundEdit.pas',
+  uRoundButton in 'src\uRoundButton.pas';
 
 end.
