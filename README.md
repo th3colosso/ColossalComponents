@@ -4,13 +4,13 @@ A collection of custom VCL components for Delphi.
 
 Components are registered on the **Colossal Controls** tab of the Tool Palette.
 
+![Colossal Controls example: TRoundEdit and TRoundButton](src/assets/readme_example.png)
+
 ## Components
 
 ### TRoundEdit
 
 An edit box with rounded corners. The frame is drawn with **GDI+** using anti-aliasing, so the corners are smooth instead of jagged (which is what you get when clipping a window with `SetWindowRgn`).
-
-![TRoundEdit example](src/assets/readme_example.png)
 
 `TRoundEdit` is a `TCustomControl` that paints the rounded frame and hosts a borderless `TEdit` inside it. The inner edit's height is set from the real font height and centered vertically, so the text stays aligned at any font size.
 
