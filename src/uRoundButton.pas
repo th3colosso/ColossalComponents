@@ -142,6 +142,22 @@ begin
   RegisterComponents('Colossal Controls', [TRoundButton]);
 end;
 
+function CapHeightOf(DC: HDC; const TM: TTextMetric): Integer;
+var
+  GM: TGlyphMetrics;
+  Mat: TMat2;
+begin
+  // Real height of a capital letter above the baseline in the font currently
+  // selected into DC (identity matrix = no transform).
+  FillChar(Mat, SizeOf(Mat), 0);
+  Mat.eM11.value := 1;
+  Mat.eM22.value := 1;
+  if GetGlyphOutline(DC, Ord('H'), GGO_METRICS, GM, 0, nil, Mat) <> GDI_ERROR then
+    Result := GM.gmptGlyphOrigin.Y
+  else
+    Result := TM.tmAscent - TM.tmInternalLeading; // bitmap fonts etc.
+end;
+
 { TRoundButton }
 
 constructor TRoundButton.Create(AOwner: TComponent);
@@ -284,19 +300,31 @@ var
   R: TRect;
   Text: string;
   Format: TTextFormat;
+  TM: TTextMetric;
+  CapH, Baseline: Integer;
 begin
   Text := Caption;
   if Text = '' then Exit;
-
-  R := ClientRect;
-  InflateRect(R, -(FBorderWidth + 4), -FBorderWidth);
 
   Canvas.Font.Assign(Font);
   if AState = rbsDisabled then
     Canvas.Font.Color := clGrayText;
   Canvas.Brush.Style := bsClear;
 
-  Format := [tfCenter, tfVerticalCenter, tfSingleLine, tfEndEllipsis];
+  // Optical vertical centering: center the body of the text (the height of a
+  // capital letter above the baseline) instead of the whole line box, which
+  // also contains the descender and internal leading and makes the text look
+  // low. DT_VCENTER is not used because it pins text taller than the rect to
+  // the top. TextHeight forces the font to be selected into the canvas DC.
+  Canvas.TextHeight(Text);
+  GetTextMetrics(Canvas.Handle, TM);
+  CapH := CapHeightOf(Canvas.Handle, TM);
+  Baseline := (Height + CapH) div 2;
+  R := Rect(FBorderWidth + 4, Baseline - TM.tmAscent,
+    Width - FBorderWidth - 4, Baseline - TM.tmAscent + TM.tmHeight);
+
+  // tfNoClip: oversized text must not be cut off by the line-box rect
+  Format := [tfCenter, tfSingleLine, tfEndEllipsis, tfNoClip];
   // Underline the accelerator only when Windows says it should be visible
   if (Perform(WM_QUERYUISTATE, 0, 0) and UISF_HIDEACCEL) <> 0 then
     Include(Format, tfHidePrefix);
