@@ -20,6 +20,7 @@ An edit box with rounded corners. The frame is drawn with **GDI+** using anti-al
 - Configurable corner radius, border width, and colors
 - Different border color when the edit has focus
 - Text is vertically centered and follows font changes
+- Transparent corners (opt-in with `Transparent = True`): the control paints what is behind it, so it looks right over any parent or sibling. By default the corners are filled with the parent's color
 - Cannot be used as a parent for other components (`csAcceptsControls` removed)
 - Double buffered, no flicker
 
@@ -34,6 +35,7 @@ An edit box with rounded corners. The frame is drawn with **GDI+** using anti-al
 | `FocusColor`  | TColor   | `$00D77800` | Border color when the edit has focus        |
 | `FillColor`   | TColor   | `clWhite` | Background color of the box and inner edit    |
 | `Padding`     | Integer  | `8`       | Space between the border and the text         |
+| `Transparent` | Boolean  | `False`   | `True` = paint what is behind the control (parent + siblings below) so the corners blend with it. `False` = fill with the parent's color only |
 | `Font`        | TFont    |           | Font of the text                              |
 
 Standard properties such as `Align`, `Anchors`, `Margins`, `TabOrder`, `PopupMenu`, `Visible`, and `Enabled` are also published.
@@ -71,6 +73,7 @@ Unlike `TRoundEdit`, it does not host another control: `TRoundButton` is a self-
 - Accelerator keys through `&` in the caption (e.g. `&Save`)
 - `ModalResult` support, like `TButton`
 - Glyph support through an image list (`Images` / `ImageIndex`), placed left, right, above, below, or centered relative to the caption; drawn grayed out when the button is disabled
+- Transparent corners (opt-in with `Transparent = True`): the control paints what is behind it, so it looks right over any parent or sibling. By default the corners are filled with the parent's color
 - Cannot be used as a parent for other components (`csAcceptsControls` removed)
 - Double buffered, no flicker
 
@@ -94,6 +97,7 @@ Unlike `TRoundEdit`, it does not host another control: `TRoundButton` is a self-
 | `ImageIndex`    | TImageIndex  | `-1`        | Glyph to show (`-1` = no glyph)                          |
 | `ImageAlignment`| TImageAlignment | `iaLeft` | Glyph position relative to the caption: `iaLeft`, `iaRight`, `iaTop`, `iaBottom`, `iaCenter` |
 | `Spacing`       | Integer      | `8`         | Space between the glyph and the caption in pixels        |
+| `Transparent`   | Boolean      | `False`     | `True` = paint what is behind the button (parent + siblings below) so the corners blend with it. `False` = fill with the parent's color only |
 | `Font`          | TFont        |             | Font of the caption                                      |
 
 Standard properties such as `Align`, `Anchors`, `Margins`, `TabOrder`, `TabStop`, `Hint`, `PopupMenu`, `Visible`, and `Enabled`, plus the usual click, mouse, and keyboard events (`OnClick`, `OnMouseEnter`, `OnKeyDown`, ...), are also published.
@@ -156,6 +160,20 @@ begin
 end;
 ```
 
+## Transparency
+
+Both components have a `Transparent` property, which is **off by default** (`False`).
+
+- **`Transparent = False` (default):** the area outside the rounded corners is filled with the parent's color (`Parent.Brush.Color`). This is the cheapest option to paint, and it looks right when the control sits directly on a parent with a solid color.
+- **`Transparent = True`:** the control paints what is really behind it (the parent's background plus any sibling controls below it in the Z-order) before drawing the rounded shape, so the corners blend with the background. Use it when a control has a different parent or color behind it than its own parent's color, for example a control placed on a form that overlaps a panel, or a parent with a background image or gradient.
+
+Turning transparency on is **more costly to paint**, because the background is captured again every time the control repaints (including on hover, press, and focus changes). Leave it off unless you actually see the wrong color in the corners.
+
+```pascal
+// A button on the form that overlaps a panel of a different color
+RoundButton2.Transparent := True;
+```
+
 ## Project structure
 
 ```
@@ -163,6 +181,7 @@ ColossalComponents/
 ├── ColossalControls.dpk     Package source
 ├── ColossalControls.dproj   Package project
 ├── src/
+│   ├── uColossalDraw.pas    Shared drawing helpers (GDI+ colors, transparent background)
 │   ├── uRoundEdit.pas       TRoundEdit component
 │   └── uRoundButton.pas     TRoundButton component
 └── bin/                     Compiled output (DCU)
@@ -170,8 +189,9 @@ ColossalComponents/
 
 ## Known limitations
 
-- The corners are painted with the parent's `Brush.Color`. If the parent has a background image or gradient, the corners show a solid color instead of the parent's background.
-- With VCL Styles active, the parent's `Brush.Color` may not match the style color, so the corners can look slightly off.
+- By default (`Transparent = False`) the corners are filled with the parent's `Brush.Color`, so a control that overlaps a sibling (e.g. a panel) or sits on a parent with a background image or gradient shows solid-colored corners. Set `Transparent = True` in those cases.
+- With `Transparent = True` the background behind the control is captured each time it paints. If what is behind it changes without the control being repainted (e.g. a sibling below it is recolored or moved at runtime), call `Invalidate` on the control. This also costs a bit more per paint.
+- Only controls that are *below* the control in the Z-order are part of its background when `Transparent = True`.
 - `TRoundEdit` has no special visual style for the disabled state yet (`TRoundButton` does).
 - `TRoundButton`'s caption is single-line, and the glyph has no separate hover/pressed images.
 - Only Win32 is built by the package at the moment.

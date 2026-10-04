@@ -138,6 +138,7 @@
         <DCCReference Include="vclactnband.dcp"/>
         <DCCReference Include="vclx.dcp"/>
         <DCCReference Include="xmlrtl.dcp"/>
+        <DCCReference Include="src\uColossalDraw.pas"/>
         <DCCReference Include="src\uRoundEdit.pas"/>
         <DCCReference Include="src\uRoundButton.pas"/>
         <BuildConfiguration Include="Base">

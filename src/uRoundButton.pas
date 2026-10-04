@@ -39,6 +39,7 @@ type
     FMouseInside: Boolean;
     FMouseDown: Boolean;
     FKeyDown: Boolean;
+    FTransparent: Boolean;
     FImages: TCustomImageList;
     FImageIndex: TImageIndex;
     FImageAlignment: TImageAlignment;
@@ -53,6 +54,7 @@ type
     procedure SetPressedColor(const Value: TColor);
     procedure SetDisabledColor(const Value: TColor);
     procedure SetDefault(const Value: Boolean);
+    procedure SetTransparent(const Value: Boolean);
     procedure SetImages(const Value: TCustomImageList);
     procedure SetImageIndex(const Value: TImageIndex);
     procedure SetImageAlignment(const Value: TImageAlignment);
@@ -108,6 +110,7 @@ type
     property ImageIndex: TImageIndex read FImageIndex write SetImageIndex default -1;
     property ImageAlignment: TImageAlignment read FImageAlignment write SetImageAlignment default iaLeft;
     property Spacing: Integer read FSpacing write SetSpacing default 8;
+    property Transparent: Boolean read FTransparent write SetTransparent default False;
     property Align;
     property Anchors;
     property Cursor;
@@ -145,15 +148,7 @@ procedure Register;
 implementation
 
 uses
-  System.Math;
-
-function ToARGB(C: TColor; Alpha: Byte = 255): ARGB;
-var
-  RGB: Cardinal;
-begin
-  RGB := ColorToRGB(C);
-  Result := MakeColor(Alpha, GetRValue(RGB), GetGValue(RGB), GetBValue(RGB));
-end;
+  System.Math, uColossalDraw;
 
 procedure Register;
 begin
@@ -197,6 +192,7 @@ begin
   FImageIndex := -1;
   FImageAlignment := iaLeft;
   FSpacing := 8;
+  FTransparent := False;
   FImageChangeLink := TChangeLink.Create;
   FImageChangeLink.OnChange := ImageListChange;
 end;
@@ -291,12 +287,9 @@ end;
 
 procedure TRoundButton.PaintParentBackground;
 begin
-  // Paint the parent's color so the corners blend with the background
-  if Parent <> nil then
-    Canvas.Brush.Color := Parent.Brush.Color
-  else
-    Canvas.Brush.Color := clBtnFace;
-  Canvas.FillRect(ClientRect);
+  // Transparent: paints what is behind the button (parent + siblings below)
+  // so the rounded corners blend with it. Otherwise: the parent's color.
+  PaintControlBackground(Self, Canvas.Handle, FTransparent);
 end;
 
 procedure TRoundButton.PaintFrame(AFillColor, ABorderColor: TColor);
@@ -462,6 +455,10 @@ procedure TRoundButton.Paint;
 var
   State: TRoundButtonState;
 begin
+  // Painting our own background makes the parent paint its children, us
+  // included: skip that nested request
+  if IsPaintingBackgroundOf(Self) then Exit;
+
   State := CurrentState;
   PaintParentBackground;
   PaintFrame(StateFillColor(State), StateBorderColor(State));
@@ -690,6 +687,15 @@ end;
 procedure TRoundButton.SetDisabledColor(const Value: TColor);
 begin
   ChangeColor(FDisabledColor, Value);
+end;
+
+procedure TRoundButton.SetTransparent(const Value: Boolean);
+begin
+  if FTransparent <> Value then
+  begin
+    FTransparent := Value;
+    Invalidate;
+  end;
 end;
 
 procedure TRoundButton.SetImages(const Value: TCustomImageList);

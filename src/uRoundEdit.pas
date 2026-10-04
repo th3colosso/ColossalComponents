@@ -21,6 +21,7 @@ type
     FFocusColor: TColor;
     FFillColor: TColor;
     FPadding: Integer;
+    FTransparent: Boolean;
     FMouseInside: Boolean;
     FOnChange: TNotifyEvent;
     function GetText: string;
@@ -31,6 +32,7 @@ type
     procedure SetFocusColor(const Value: TColor);
     procedure SetFillColor(const Value: TColor);
     procedure SetPadding(const Value: Integer);
+    procedure SetTransparent(const Value: Boolean);
     procedure EditEnter(Sender: TObject);
     procedure EditExit(Sender: TObject);
     procedure EditChange(Sender: TObject);
@@ -70,6 +72,7 @@ type
     property FocusColor: TColor read FFocusColor write SetFocusColor default $00D77800;
     property FillColor: TColor read FFillColor write SetFillColor default clWhite;
     property Padding: Integer read FPadding write SetPadding default 8;
+    property Transparent: Boolean read FTransparent write SetTransparent default False;
     property Align;
     property Anchors;
     property Font;
@@ -103,13 +106,8 @@ procedure Register;
 
 implementation
 
-function ToARGB(C: TColor; Alpha: Byte = 255): ARGB;
-var
-  RGB: Cardinal;
-begin
-  RGB := ColorToRGB(C);
-  Result := MakeColor(Alpha, GetRValue(RGB), GetGValue(RGB), GetBValue(RGB));
-end;
+uses
+  uColossalDraw;
 
 procedure Register;
 begin
@@ -133,6 +131,7 @@ begin
   FFocusColor := $00D77800;
   FFillColor := clWhite;
   FPadding := 8;
+  FTransparent := False;
 
   FEdit := TEdit.Create(Self);
   FEdit.Name := 'InnerEdit';
@@ -355,12 +354,14 @@ var
   X, Y, W, H, D, HalfPen: Single;
   BorderCol: TColor;
 begin
-  // 1) Paint the parent's background so the corners blend with it
-  if Parent <> nil then
-    Canvas.Brush.Color := Parent.Brush.Color
-  else
-    Canvas.Brush.Color := clBtnFace;
-  Canvas.FillRect(ClientRect);
+  // Painting our own background makes the parent paint its children, us
+  // included: skip that nested request
+  if IsPaintingBackgroundOf(Self) then Exit;
+
+  // 1) Paint what is behind the control so the corners blend with it
+  // (the parent and the siblings below, or just the parent's color when
+  // Transparent is False)
+  PaintControlBackground(Self, Canvas.Handle, FTransparent);
 
   // 2) Draw the anti-aliased rounded rectangle
   if FEdit.Focused then BorderCol := FFocusColor else BorderCol := FBorderColor;
@@ -432,6 +433,11 @@ end;
 procedure TRoundEdit.SetFillColor(const Value: TColor);
 begin
   if FFillColor <> Value then begin FFillColor := Value; LayoutEdit; Invalidate; end;
+end;
+
+procedure TRoundEdit.SetTransparent(const Value: Boolean);
+begin
+  if FTransparent <> Value then begin FTransparent := Value; Invalidate; end;
 end;
 
 procedure TRoundEdit.SetPadding(const Value: Integer);
