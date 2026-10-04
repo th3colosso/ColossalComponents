@@ -1,8 +1,8 @@
 unit uRoundEdit;
 
-{ TRoundEdit - Edit com cantos arredondados e suavizados (anti-alias) via GDI+.
-  Funciona como um "container": desenha a moldura com GDI+ e hospeda um TEdit
-  sem borda dentro dela. }
+{ TRoundEdit - Edit with rounded, anti-aliased corners drawn with GDI+.
+  Works as a "container": it draws the frame with GDI+ and hosts a borderless
+  TEdit inside it. }
 
 interface
 
@@ -40,7 +40,7 @@ type
     procedure CreateWnd; override;
   public
     constructor Create(AOwner: TComponent); override;
-    property Edit: TEdit read FEdit; // acesso a PasswordChar, OnChange, etc.
+    property Edit: TEdit read FEdit; // access to PasswordChar, OnChange, etc.
   published
     property Text: string read GetText write SetText;
     property Radius: Integer read FRadius write SetRadius default 10;
@@ -83,8 +83,8 @@ end;
 constructor TRoundEdit.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
-  // csAcceptsControls removido: o designer nao permite soltar outros
-  // componentes dentro do TRoundEdit
+  // csAcceptsControls removed: the designer does not allow dropping other
+  // components inside TRoundEdit
   ControlStyle := ControlStyle - [csOpaque, csAcceptsControls];
   DoubleBuffered := True;
   Width := 200;
@@ -116,7 +116,7 @@ end;
 
 procedure TRoundEdit.WMEraseBkgnd(var Msg: TWMEraseBkgnd);
 begin
-  Msg.Result := 1; // o Paint cuida de tudo (evita flicker)
+  Msg.Result := 1; // Paint draws everything (avoids flicker)
 end;
 
 procedure TRoundEdit.EditStateChange(Sender: TObject);
@@ -130,7 +130,7 @@ var
   OldFont: HFONT;
   TM: TTextMetric;
 begin
-  // Mede a fonte sem depender de handle/canvas do controle
+  // Measures the font without depending on the control's handle/canvas
   DC := GetDC(0);
   try
     OldFont := SelectObject(DC, Font.Handle);
@@ -154,8 +154,8 @@ begin
   FEdit.Color := FFillColor;
   TextH := MeasureTextHeight;
   Inset := FPadding + FBorderWidth;
-  // AutoSize desligado: a altura do edit = altura exata do texto,
-  // entao centralizar o edit = centralizar o texto.
+  // AutoSize is off: the edit height = the exact text height, so
+  // centering the edit = centering the text.
   FEdit.SetBounds(Inset, (Height - TextH) div 2, Width - Inset * 2, TextH);
 end;
 
@@ -182,14 +182,14 @@ var
   X, Y, W, H, D, HalfPen: Single;
   BorderCol: TColor;
 begin
-  // 1) Pinta o fundo do pai para os cantos se misturarem com o fundo
+  // 1) Paint the parent's background so the corners blend with it
   if Parent <> nil then
     Canvas.Brush.Color := Parent.Brush.Color
   else
     Canvas.Brush.Color := clBtnFace;
   Canvas.FillRect(ClientRect);
 
-  // 2) Desenha o retangulo arredondado com anti-alias
+  // 2) Draw the anti-aliased rounded rectangle
   if FEdit.Focused then BorderCol := FFocusColor else BorderCol := FBorderColor;
 
   HalfPen := FBorderWidth / 2;
@@ -209,10 +209,10 @@ begin
     G.SetSmoothingMode(SmoothingModeAntiAlias);
     G.SetPixelOffsetMode(PixelOffsetModeHalf);
 
-    Path.AddArc(X, Y, D, D, 180, 90);                 // superior esquerdo
-    Path.AddArc(X + W - D, Y, D, D, 270, 90);         // superior direito
-    Path.AddArc(X + W - D, Y + H - D, D, D, 0, 90);   // inferior direito
-    Path.AddArc(X, Y + H - D, D, D, 90, 90);          // inferior esquerdo
+    Path.AddArc(X, Y, D, D, 180, 90);                 // top left
+    Path.AddArc(X + W - D, Y, D, D, 270, 90);         // top right
+    Path.AddArc(X + W - D, Y + H - D, D, D, 0, 90);   // bottom right
+    Path.AddArc(X, Y + H - D, D, D, 90, 90);          // bottom left
     Path.CloseFigure;
 
     G.FillPath(Brush, Path);
