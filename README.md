@@ -36,17 +36,25 @@ An edit box with rounded corners. The frame is drawn with **GDI+** using anti-al
 | `Padding`     | Integer  | `8`       | Space between the border and the text         |
 | `Font`        | TFont    |           | Font of the text                              |
 
-Standard properties such as `Align`, `Anchors`, `Margins`, `TabOrder`, `Visible`, and `Enabled` are also published.
+Standard properties such as `Align`, `Anchors`, `Margins`, `TabOrder`, `PopupMenu`, `Visible`, and `Enabled` are also published.
+
+**Published events**
+
+`OnChange`, `OnClick`, `OnDblClick`, `OnEnter`, `OnExit`, `OnKeyDown`, `OnKeyPress`, `OnKeyUp`, `OnMouseDown`, `OnMouseMove`, `OnMouseUp`, `OnMouseEnter`, `OnMouseLeave`, and `OnContextPopup`.
+
+The focus, keyboard, and most of the mouse activity happen inside the inner edit, so its events are forwarded to the ones above (mouse coordinates are translated to the `TRoundEdit`). `OnMouseEnter` / `OnMouseLeave` fire once for the whole control, not each time the cursor moves between the frame and the inner edit. If a `PopupMenu` is assigned, it replaces the default edit context menu.
 
 **Accessing the inner edit**
 
 The inner `TEdit` is exposed through the public `Edit` property, for anything not published directly:
 
 ```pascal
-RoundEdit1.Edit.OnChange := MyChangeHandler;
+RoundEdit1.OnChange := MyChangeHandler;
 RoundEdit1.Edit.PasswordChar := '*';
 RoundEdit1.Edit.NumbersOnly := True;
 ```
+
+> Use the events of the `TRoundEdit` itself. Assigning an event directly on `Edit` (e.g. `Edit.OnChange`) replaces the forwarding handler, and the corresponding `TRoundEdit` event stops firing.
 
 ### TRoundButton
 

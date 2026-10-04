@@ -9,7 +9,7 @@ interface
 uses
   Winapi.Windows, Winapi.Messages, Winapi.GDIPAPI, Winapi.GDIPOBJ,
   System.Classes, System.SysUtils, System.Types,
-  Vcl.Controls, Vcl.Graphics, Vcl.StdCtrls, Vcl.Forms;
+  Vcl.Controls, Vcl.Graphics, Vcl.StdCtrls, Vcl.Forms, Vcl.Menus;
 
 type
   TRoundEdit = class(TCustomControl)
@@ -21,6 +21,8 @@ type
     FFocusColor: TColor;
     FFillColor: TColor;
     FPadding: Integer;
+    FMouseInside: Boolean;
+    FOnChange: TNotifyEvent;
     function GetText: string;
     procedure SetText(const Value: string);
     procedure SetRadius(const Value: Integer);
@@ -29,11 +31,30 @@ type
     procedure SetFocusColor(const Value: TColor);
     procedure SetFillColor(const Value: TColor);
     procedure SetPadding(const Value: Integer);
-    procedure EditStateChange(Sender: TObject);
+    procedure EditEnter(Sender: TObject);
+    procedure EditExit(Sender: TObject);
+    procedure EditChange(Sender: TObject);
+    procedure EditClick(Sender: TObject);
+    procedure EditDblClick(Sender: TObject);
+    procedure EditKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure EditKeyPress(Sender: TObject; var Key: Char);
+    procedure EditKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure EditMouseDown(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
+    procedure EditMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
+    procedure EditMouseUp(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
+    procedure EditMouseEnter(Sender: TObject);
+    procedure EditMouseLeave(Sender: TObject);
+    procedure EditContextPopup(Sender: TObject; MousePos: TPoint;
+      var Handled: Boolean);
+    function CursorInside: Boolean;
     procedure LayoutEdit;
     function MeasureTextHeight: Integer;
     procedure CMFontChanged(var Msg: TMessage); message CM_FONTCHANGED;
     procedure WMEraseBkgnd(var Msg: TWMEraseBkgnd); message WM_ERASEBKGND;
+    procedure CMMouseEnter(var Msg: TMessage); message CM_MOUSEENTER;
+    procedure CMMouseLeave(var Msg: TMessage); message CM_MOUSELEAVE;
   protected
     procedure Paint; override;
     procedure Resize; override;
@@ -59,6 +80,23 @@ type
     property Enabled;
     property Margins;
     property AlignWithMargins;
+    property PopupMenu;
+    // Events of the inner edit are forwarded to these, so they fire as if
+    // the focus and the mouse were on the TRoundEdit itself.
+    property OnChange: TNotifyEvent read FOnChange write FOnChange;
+    property OnClick;
+    property OnContextPopup;
+    property OnDblClick;
+    property OnEnter;
+    property OnExit;
+    property OnKeyDown;
+    property OnKeyPress;
+    property OnKeyUp;
+    property OnMouseDown;
+    property OnMouseEnter;
+    property OnMouseLeave;
+    property OnMouseMove;
+    property OnMouseUp;
   end;
 
 procedure Register;
@@ -103,8 +141,20 @@ begin
   FEdit.BorderStyle := bsNone;
   FEdit.AutoSize := False;
   FEdit.Color := FFillColor;
-  FEdit.OnEnter := EditStateChange;
-  FEdit.OnExit := EditStateChange;
+  FEdit.OnEnter := EditEnter;
+  FEdit.OnExit := EditExit;
+  FEdit.OnChange := EditChange;
+  FEdit.OnClick := EditClick;
+  FEdit.OnDblClick := EditDblClick;
+  FEdit.OnKeyDown := EditKeyDown;
+  FEdit.OnKeyPress := EditKeyPress;
+  FEdit.OnKeyUp := EditKeyUp;
+  FEdit.OnMouseDown := EditMouseDown;
+  FEdit.OnMouseMove := EditMouseMove;
+  FEdit.OnMouseUp := EditMouseUp;
+  FEdit.OnMouseEnter := EditMouseEnter;
+  FEdit.OnMouseLeave := EditMouseLeave;
+  FEdit.OnContextPopup := EditContextPopup;
   LayoutEdit;
 end;
 
@@ -119,9 +169,132 @@ begin
   Msg.Result := 1; // Paint draws everything (avoids flicker)
 end;
 
-procedure TRoundEdit.EditStateChange(Sender: TObject);
+{ ---- inner edit events, forwarded to the TRoundEdit events ---- }
+
+procedure TRoundEdit.EditEnter(Sender: TObject);
 begin
-  Invalidate;
+  Invalidate; // focus color
+  DoEnter;
+end;
+
+procedure TRoundEdit.EditExit(Sender: TObject);
+begin
+  Invalidate; // back to the normal border color
+  DoExit;
+end;
+
+procedure TRoundEdit.EditChange(Sender: TObject);
+begin
+  if Assigned(FOnChange) then
+    FOnChange(Self);
+end;
+
+procedure TRoundEdit.EditClick(Sender: TObject);
+begin
+  Click;
+end;
+
+procedure TRoundEdit.EditDblClick(Sender: TObject);
+begin
+  DblClick;
+end;
+
+procedure TRoundEdit.EditKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+begin
+  KeyDown(Key, Shift);
+end;
+
+procedure TRoundEdit.EditKeyPress(Sender: TObject; var Key: Char);
+begin
+  KeyPress(Key);
+end;
+
+procedure TRoundEdit.EditKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
+begin
+  KeyUp(Key, Shift);
+end;
+
+procedure TRoundEdit.EditMouseDown(Sender: TObject; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
+begin
+  // Coordinates are translated from the inner edit to the TRoundEdit
+  MouseDown(Button, Shift, X + FEdit.Left, Y + FEdit.Top);
+end;
+
+procedure TRoundEdit.EditMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
+begin
+  MouseMove(Shift, X + FEdit.Left, Y + FEdit.Top);
+end;
+
+procedure TRoundEdit.EditMouseUp(Sender: TObject; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
+begin
+  MouseUp(Button, Shift, X + FEdit.Left, Y + FEdit.Top);
+end;
+
+function TRoundEdit.CursorInside: Boolean;
+begin
+  Result := ClientRect.Contains(ScreenToClient(Mouse.CursorPos));
+end;
+
+procedure TRoundEdit.CMMouseEnter(var Msg: TMessage);
+begin
+  // The inner edit sits on top of the TRoundEdit, so moving between the two
+  // would report a leave + enter pair. Track "inside" for the whole control.
+  if not FMouseInside then
+  begin
+    FMouseInside := True;
+    inherited;
+  end;
+end;
+
+procedure TRoundEdit.CMMouseLeave(var Msg: TMessage);
+begin
+  // Ignore the leave when the cursor only moved onto the inner edit
+  if FMouseInside and not CursorInside then
+  begin
+    FMouseInside := False;
+    inherited;
+  end;
+end;
+
+procedure TRoundEdit.EditMouseEnter(Sender: TObject);
+begin
+  Perform(CM_MOUSEENTER, 0, 0); // no-op when already inside
+end;
+
+procedure TRoundEdit.EditMouseLeave(Sender: TObject);
+begin
+  Perform(CM_MOUSELEAVE, 0, 0); // ignored while the cursor is still inside
+end;
+
+procedure TRoundEdit.EditContextPopup(Sender: TObject; MousePos: TPoint;
+  var Handled: Boolean);
+var
+  ClientPos, ScreenPos: TPoint;
+begin
+  // MousePos is (-1, -1) when the menu is opened from the keyboard
+  if (MousePos.X = -1) and (MousePos.Y = -1) then
+  begin
+    ClientPos := MousePos;
+    ScreenPos := FEdit.ClientToScreen(Point(0, FEdit.Height));
+  end
+  else
+  begin
+    ClientPos := Point(MousePos.X + FEdit.Left, MousePos.Y + FEdit.Top);
+    ScreenPos := FEdit.ClientToScreen(MousePos);
+  end;
+
+  if Assigned(OnContextPopup) then
+    OnContextPopup(Self, ClientPos, Handled);
+
+  // Show the TRoundEdit's PopupMenu instead of the default edit menu
+  if (not Handled) and (PopupMenu <> nil) and PopupMenu.AutoPopup then
+  begin
+    PopupMenu.PopupComponent := Self;
+    PopupMenu.Popup(ScreenPos.X, ScreenPos.Y);
+    Handled := True;
+  end;
 end;
 
 function TRoundEdit.MeasureTextHeight: Integer;
