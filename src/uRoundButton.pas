@@ -155,22 +155,6 @@ begin
   RegisterComponents('Colossal Controls', [TRoundButton]);
 end;
 
-function CapHeightOf(DC: HDC; const TM: TTextMetric): Integer;
-var
-  GM: TGlyphMetrics;
-  Mat: TMat2;
-begin
-  // Real height of a capital letter above the baseline in the font currently
-  // selected into DC (identity matrix = no transform).
-  FillChar(Mat, SizeOf(Mat), 0);
-  Mat.eM11.value := 1;
-  Mat.eM22.value := 1;
-  if GetGlyphOutline(DC, Ord('H'), GGO_METRICS, GM, 0, nil, Mat) <> GDI_ERROR then
-    Result := GM.gmptGlyphOrigin.Y
-  else
-    Result := TM.tmAscent - TM.tmInternalLeading; // bitmap fonts etc.
-end;
-
 { TRoundButton }
 
 constructor TRoundButton.Create(AOwner: TComponent);

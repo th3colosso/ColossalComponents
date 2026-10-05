@@ -5,11 +5,29 @@ unit uColossalDraw;
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, Winapi.GDIPAPI,
+  Winapi.Windows, Winapi.Messages, Winapi.GDIPAPI, Winapi.GDIPOBJ,
   System.Types, Vcl.Controls, Vcl.Graphics, System.Classes;
 
 { Converts a TColor (including system colors) to a GDI+ ARGB value. }
 function ToARGB(C: TColor; Alpha: Byte = 255): ARGB;
+
+{ Creates a rounded rectangle path (the caller frees it). The radius is
+  limited so it never exceeds half of the width/height. A radius of 0 gives a
+  plain rectangle. }
+function CreateRoundRectPath(X, Y, W, H, ARadius: Single): TGPGraphicsPath;
+
+{ Fills / outlines a rounded rectangle with anti-aliasing (G must already
+  have its smoothing mode set). }
+procedure FillRoundRect(G: TGPGraphics; X, Y, W, H, ARadius: Single;
+  AColor: TColor);
+procedure StrokeRoundRect(G: TGPGraphics; X, Y, W, H, ARadius: Single;
+  AColor: TColor; AWidth: Single);
+
+{ Height of a capital letter above the baseline, in the font currently
+  selected into DC. Used to center text optically (by the body of the
+  letters instead of the whole line box, which includes the descender and the
+  internal leading and makes the text look low). }
+function CapHeightOf(DC: HDC; const TM: TTextMetric): Integer;
 
 { Paints the background of AControl into DC (a DC whose origin is the
   top-left corner of the control).
@@ -41,6 +59,79 @@ var
 begin
   RGB := ColorToRGB(C);
   Result := MakeColor(Alpha, GetRValue(RGB), GetGValue(RGB), GetBValue(RGB));
+end;
+
+function CreateRoundRectPath(X, Y, W, H, ARadius: Single): TGPGraphicsPath;
+var
+  D: Single;
+begin
+  D := ARadius * 2;
+  if D > H then D := H;
+  if D > W then D := W;
+
+  Result := TGPGraphicsPath.Create;
+  if D <= 0 then
+    Result.AddRectangle(MakeRect(X, Y, W, H))
+  else
+  begin
+    Result.AddArc(X, Y, D, D, 180, 90);                 // top left
+    Result.AddArc(X + W - D, Y, D, D, 270, 90);         // top right
+    Result.AddArc(X + W - D, Y + H - D, D, D, 0, 90);   // bottom right
+    Result.AddArc(X, Y + H - D, D, D, 90, 90);          // bottom left
+    Result.CloseFigure;
+  end;
+end;
+
+procedure FillRoundRect(G: TGPGraphics; X, Y, W, H, ARadius: Single;
+  AColor: TColor);
+var
+  Path: TGPGraphicsPath;
+  Brush: TGPSolidBrush;
+begin
+  Path := nil;
+  Brush := nil;
+  try
+    Path := CreateRoundRectPath(X, Y, W, H, ARadius);
+    Brush := TGPSolidBrush.Create(ToARGB(AColor));
+    G.FillPath(Brush, Path);
+  finally
+    Brush.Free;
+    Path.Free;
+  end;
+end;
+
+procedure StrokeRoundRect(G: TGPGraphics; X, Y, W, H, ARadius: Single;
+  AColor: TColor; AWidth: Single);
+var
+  Path: TGPGraphicsPath;
+  Pen: TGPPen;
+begin
+  Path := nil;
+  Pen := nil;
+  try
+    Path := CreateRoundRectPath(X, Y, W, H, ARadius);
+    Pen := TGPPen.Create(ToARGB(AColor), AWidth);
+    G.DrawPath(Pen, Path);
+  finally
+    Pen.Free;
+    Path.Free;
+  end;
+end;
+
+function CapHeightOf(DC: HDC; const TM: TTextMetric): Integer;
+var
+  GM: TGlyphMetrics;
+  Mat: TMat2;
+begin
+  // Real height of a capital letter above the baseline in the font currently
+  // selected into DC (identity matrix = no transform).
+  FillChar(Mat, SizeOf(Mat), 0);
+  Mat.eM11.value := 1;
+  Mat.eM22.value := 1;
+  if GetGlyphOutline(DC, Ord('H'), GGO_METRICS, GM, 0, nil, Mat) <> GDI_ERROR then
+    Result := GM.gmptGlyphOrigin.Y
+  else
+    Result := TM.tmAscent - TM.tmInternalLeading; // bitmap fonts etc.
 end;
 
 function IsPaintingBackgroundOf(AControl: TControl): Boolean;
