@@ -278,6 +278,7 @@ RoundButton2.Transparent := True;
 ColossalComponents/
 ├── ColossalControls.dpk     Package source
 ├── ColossalControls.dproj   Package project
+├── LICENSE                  MIT License
 ├── src/
 │   ├── uColossalDraw.pas    Shared drawing helpers (GDI+ colors and shapes, transparent background)
 │   ├── uRoundEdit.pas       TRoundEdit component
@@ -300,4 +301,4 @@ ColossalComponents/
 
 ## License
 
-No license specified yet.
+Released under the [MIT License](LICENSE).
